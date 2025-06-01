@@ -1,5 +1,4 @@
-
-# GitProtoGen
+# git-proto-gen
 
 **GitProtoGen** is a CLI tool that wraps the [Buf](https://buf.build) code generator, making it easy to generate client code from `.proto` files—both locally and from remote Git repositories (public or private).
 

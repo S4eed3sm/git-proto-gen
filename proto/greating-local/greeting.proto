@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package greeting;
+
+option go_package = "github.com/S4eed3sm/local-test-proto/events";
+
+// LocalGreetingRequest represents a request to get a greeting
+message LocalGreetingRequest {
+  string name = 1;
+}
+
+// LocalGreetingResponse represents the response containing a greeting
+message LocalGreetingResponse {
+  string message = 1;
+  string timestamp = 2;
+}

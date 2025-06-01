@@ -1,0 +1,16 @@
+version: v2
+
+clean: true
+managed:
+  enabled: true  
+  disable:
+    - file_option: go_package
+plugins:
+  - remote: buf.build/protocolbuffers/go 
+    out: __events__
+    opt:
+      - paths=source_relative      
+  - remote: buf.build/grpc/go 
+    out: __events__
+    opt:
+      - paths=source_relative

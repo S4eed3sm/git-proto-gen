@@ -18,19 +18,22 @@ func replaceWithRegex(input []byte) []byte {
 	return re.ReplaceAll(input, []byte("out: __events__"))
 }
 
-func checkOptionalYamlFiles() {
-	t, exist := getFileIfExists(bufYamlFileName)
+func checkBufOptionalConfigs(dir string) {
+	t, exist := getFileIfExists(filepath.Join(dir, bufYamlFileName))
 	if exist {
+		logger.Debug("Using local buf.yaml file")
 		bufYamlContent = replaceWithRegex(t)
 	}
 
-	t, exist = getFileIfExists(bufGenGoYamlFileName)
+	t, exist = getFileIfExists(filepath.Join(dir, bufGenGoYamlFileName))
 	if exist {
+		logger.Debug("Using local buf.gen.go.yaml file")
 		bufGenGoYamlContent = replaceWithRegex(t)
 	}
 
-	t, exist = getFileIfExists(bufGenJsYamlFileName)
+	t, exist = getFileIfExists(filepath.Join(dir, bufGenJsYamlFileName))
 	if exist {
+		logger.Debug("Using local buf.gen.js.yaml file")
 		bufGenJsYamlContent = replaceWithRegex(t)
 	}
 }
@@ -188,9 +191,18 @@ func prepareTempFilesAndDirs(ctx context.Context, config *Config) (string, strin
 	}
 
 	if len(config.PrivateRepos) > 0 {
-		for _, p := range config.PrivateRepos {
-			if err := downloadPrivateRemoteProtoToTemp(ctx, config.GithubToken, p, hostProtoSubDir); err != nil {
-				logger.Error("failed to download private-repo", "proto", p, "error", err)
+		switch config.GithubAuthMethod {
+		case GithubAuthMethodToken:
+			for _, p := range config.PrivateRepos {
+				if err := downloadPrivateRemoteProtoToTemp(ctx, config.GithubToken, p, hostProtoSubDir); err != nil {
+					logger.Error("failed to download private-repo", "proto", p, "error", err)
+				}
+			}
+		case GithubAuthMethodSSH:
+			for _, p := range config.PrivateRepos {
+				if err := downloadPrivateRemoteProtoToTempWithSSH(ctx, p, hostProtoSubDir); err != nil {
+					logger.Error("failed to download private-repo", "proto", p, "error", err)
+				}
 			}
 		}
 		logger.Info("successfully downloaded all private repos")

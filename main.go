@@ -20,13 +20,13 @@ var logger = slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
 }))
 
 func main() {
-	checkOptionalYamlFiles()
 	config, err := parseArgs()
 	if err != nil {
 		panic(err)
 	}
 
-	if err := run(context.Background(), &config); err != nil {
+	checkBufOptionalConfigs(config.OptionalBufConfigsPath)
+	if err := run(context.Background(), config); err != nil {
 		panic(err)
 	}
 }
@@ -58,7 +58,7 @@ func run(ctx context.Context, config *Config) error {
 			Image:      "bufbuild/buf:1.54.0",
 			WorkingDir: "/workspace",
 			Entrypoint: []string{"sh"},
-			Cmd:        []string{"-c", "tail -f /dev/null"}, // Keep container running
+			Cmd:        []string{"-c", "tail -f /dev/null"},
 			WaitingFor: wait.ForExec([]string{"echo", "ready"}).
 				WithStartupTimeout(120 * time.Second).
 				WithPollInterval(5 * time.Second),

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -11,13 +12,36 @@ import (
 	"golang.org/x/oauth2"
 )
 
+// checkSSHKeys checks if SSH keys are available in the user's home directory
+func checkSSHKeys() bool {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return false
+	}
+
+	sshDir := filepath.Join(homeDir, ".ssh")
+	if _, err := os.Stat(sshDir); os.IsNotExist(err) {
+		return false
+	}
+
+	// Check for common SSH key files
+	keyFiles := []string{"id_rsa", "id_ed25519", "id_ecdsa"}
+	for _, key := range keyFiles {
+		if _, err := os.Stat(filepath.Join(sshDir, key)); err == nil {
+			return true
+		}
+	}
+
+	return false
+}
+
 // downloadPrivateRemoteProtoToTemp parses the private-repo GitHub path and downloads .proto files
 // into the specified destination directory.
 func downloadPrivateRemoteProtoToTemp(ctx context.Context, githubToken, remotePath, dstDir string) error {
 	if githubToken == "" {
 		return fmt.Errorf("gitHub token is required for private-repo access.")
 	}
-
+	logger.Info("downloading private-repo proto files using GitHub API", "remotePath", remotePath)
 	parts := strings.SplitN(remotePath, "/", 4)
 	if len(parts) < 4 || parts[0] != "github.com" {
 		return fmt.Errorf("invalid repo path format: '%s'.", remotePath)
@@ -34,6 +58,40 @@ func downloadPrivateRemoteProtoToTemp(ctx context.Context, githubToken, remotePa
 	client := github.NewClient(tc)
 
 	return fetchAndSaveGitHubContents(ctx, client, owner, repo, pathInRepo, dstDir)
+}
+
+func downloadPrivateRemoteProtoToTempWithSSH(ctx context.Context, remotePath, dstDir string) error {
+	logger.Info("downloading private-repo proto files using SSH", "remotePath", remotePath)
+	parts := strings.SplitN(remotePath, "/", 4)
+	if len(parts) < 4 || parts[0] != "github.com" {
+		return fmt.Errorf("invalid repo path format: '%s'.", remotePath)
+	}
+
+	owner := parts[1]      // e.g: S4ee3sm
+	repo := parts[2]       // e.g: public-test-repo
+	pathInRepo := parts[3] // e.g:  proto or proto/file.proto
+
+	sshURL := fmt.Sprintf("git@github.com:%s/%s.git", owner, repo)
+	tempRepoDir := filepath.Join(dstDir, repo)
+	if err := os.MkdirAll(tempRepoDir, 0755); err != nil {
+		return fmt.Errorf("failed to create temporary directory for repository: %w", err)
+	}
+
+	cmd := exec.CommandContext(ctx, "git", "clone", sshURL, tempRepoDir)
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to clone repository using SSH: %w", err)
+	}
+
+	sourcePath := filepath.Join(tempRepoDir, pathInRepo)
+	if err := copyLocalProtoToTemp(sourcePath, dstDir); err != nil {
+		return fmt.Errorf("failed to copy proto files from cloned repository: %w", err)
+	}
+
+	if err := os.RemoveAll(tempRepoDir); err != nil {
+		return fmt.Errorf("failed to clean up temporary repository: %w", err)
+	}
+
+	return nil
 }
 
 // downloadPublicRemoteProtoToTemp parses the public-repo GitHub path and downloads .proto files

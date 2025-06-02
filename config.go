@@ -26,20 +26,28 @@ var bufGenGoYamlContent, _ = f1.ReadFile("buf/buf.gen.go.yaml")
 var f2 embed.FS
 var bufGenJsYamlContent, _ = f2.ReadFile("buf/buf.gen.js.yaml")
 
+type GithubAuthMethodType string
+
+const (
+	GithubAuthMethodSSH   GithubAuthMethodType = "ssh"
+	GithubAuthMethodToken GithubAuthMethodType = "token"
+)
+
 type Config struct {
-	LocalPath    string
-	PrivateRepos []string
-	PublicRepos  []string
-	OutputPath   string
-	Languages    []string
-	GithubToken  string
+	LocalPath              string
+	PrivateRepos           []string
+	PublicRepos            []string
+	OutputPath             string
+	Languages              []string
+	GithubToken            string
+	GithubAuthMethod       GithubAuthMethodType
+	OptionalBufConfigsPath string
 }
 
-func parseArgs() (Config, error) {
+func parseArgs() (*Config, error) {
 	var cfg Config
-
 	cmd := &cobra.Command{
-		Use:   "proto-gen",
+		Use:   "git-proto-gen",
 		Short: "Generate code from .proto files",
 		Long:  "A CLI tool for generating code from .proto definitions from local or remote GitHub sources.",
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -58,8 +66,16 @@ func parseArgs() (Config, error) {
 				return errors.New("you must provide at least one --lang (go, js, or both)")
 			}
 
-			if len(cfg.PrivateRepos) > 0 && cfg.GithubToken == "" {
-				return errors.New("you must provide a GitHub token with --token for private repos")
+			if len(cfg.PrivateRepos) > 0 && cfg.GithubToken == "" && !checkSSHKeys() {
+				return errors.New("you must provide a GitHub token with --token for private repos or have SSH keys configured")
+			}
+
+			if len(cfg.PrivateRepos) > 0 {
+				if cfg.GithubToken == "" {
+					cfg.GithubAuthMethod = GithubAuthMethodSSH
+				} else {
+					cfg.GithubAuthMethod = GithubAuthMethodToken
+				}
 			}
 
 			return nil
@@ -71,10 +87,10 @@ func parseArgs() (Config, error) {
 	cmd.Flags().StringSliceVar(&cfg.PublicRepos, "public-repo", nil, `GitHub path(s) to public proto repos (repeatable, comma-separated), e.g: "github.com/S4eed3sm/public-test-proto/proto"`)
 	cmd.Flags().StringVar(&cfg.OutputPath, "output", "events", "Output directory for generated files")
 	cmd.Flags().StringSliceVar(&cfg.Languages, "lang", []string{"go", "js"}, "Target language(s) for code generation: go, js (comma-separated or repeatable)")
-	cmd.Flags().StringVar(&cfg.GithubToken, "token", "", "GitHub token for private repos")
+	cmd.Flags().StringVar(&cfg.OptionalBufConfigsPath, "buf-configs", "", "Path to optional buf config files (buf.yaml, buf.gen.go.yaml, buf.gen.js.yaml)")
 
 	if err := cmd.Execute(); err != nil {
-		return Config{}, err
+		return nil, err
 	}
-	return cfg, nil
+	return &cfg, nil
 }

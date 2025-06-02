@@ -1,24 +1,24 @@
 # git-proto-gen
 
-**git-proto-gen** is a CLI tool that wraps the [Buf](https://buf.build) code generator, making it easy to generate client code from `.proto` files—both locally and from remote Git repositories (public or private).
+**git-proto-gen** is a CLI tool that wraps the [Buf](https://buf.build) code generator, simplifying the process of generating client code from `.proto` files—both locally and from remote GitHub repositories (public or private).
 
 ---
 
 ## ✨ Features
 
-- 🚀 Generate code using [Buf](https://buf.build) with a single command.
-- 📦 Supports fetching `.proto` files from:
+- 🚀 Generate code using [Buf](https://buf.build) with a single command
+- 📦 Fetch `.proto` files from:
   - Local directories
   - Public GitHub repositories
-  - Private GitHub repositories
+  - Private GitHub repositories (via `GitHub API Token` or `SSH-Key`)
 - 🧬 Supports multiple languages: **Go** and **JavaScript**
-- 🐳 Uses Docker to ensure consistency and avoid local dependencies
+- 🐳 Runs in Docker for consistent and dependency-free builds
 
 ---
 
 ## 🛠️ Prerequisites
 
-- [Go](https://golang.org/) 1.16+
+- [Go](https://golang.org/) 1.16 or higher
 - [Docker](https://www.docker.com/)
 
 ---
@@ -45,8 +45,17 @@
 Run the tool with your desired configuration:
 
 ```bash
-./git-proto-gen  --local proto --private-repo github.com/S4eed3sm/private-test-proto/proto --public-repo github.com/S4eed3sm/public-test-proto/proto/greeting.proto  --public-repo github.com/S4eed3sm/public-test-proto/proto/greeting_service.proto   --lang go --lang js --token $GITHUB_TOKEN
+./git-proto-gen \
+  --local proto \
+  --private-repo github.com/S4eed3sm/private-test-proto/proto \
+  --public-repo github.com/S4eed3sm/public-test-proto/proto/greeting.proto \
+  --public-repo github.com/S4eed3sm/public-test-proto/proto/greeting_service.proto \
+  --lang go \
+  --lang js \
+  --token $GITHUB_TOKEN
 ```
+
+> 💡 For SSH access (instead of GitHub tokens), make sure your SSH agent is running and keys are loaded and remove --token argument.
 
 ---
 
@@ -57,27 +66,27 @@ Usage:
   git-proto-gen [flags]
 
 Flags:
-  -h, --help                   Show help message
-      --lang strings           Target language(s) for code generation: go, js (comma-separated or repeatable)
-      --local string           Path to local .proto files (default: "proto")
-      --output string          Output directory for generated files (default: "events")
-      --private-repo strings   Private GitHub repo paths (repeatable), e.g. "github.com/user/private-repo/proto"
-      --public-repo strings    Public GitHub repo paths (repeatable), e.g. "github.com/user/public-repo/proto"
-      --token string           GitHub token (required for private repos)
+      --buf-configs string     Path to optional buf config files (buf.yaml, buf.gen.go.yaml, buf.gen.js.yaml)
+  -h, --help                   help for git-proto-gen
+      --lang strings           Target language(s) for code generation: go, js (comma-separated or repeatable) (default [go,js])
+      --local string           Path to local .proto files, e.g: './proto' (default "proto")
+      --output string          Output directory for generated files (default "events")
+      --private-repo strings   GitHub path(s) to private proto repos (repeatable, comma-separated), e.g: "github.com/S4eed3sm/private-test-proto/proto"
+      --public-repo strings    GitHub path(s) to public proto repos (repeatable, comma-separated), e.g: "github.com/S4eed3sm/public-test-proto/proto"
 ```
 
 ---
 
 ## 🧬 How It Works
 
-1. Creates a temporary workspace.
-2. Clones remote `.proto` files into the workspace.
-3. Starts a Docker container with the `bufbuild/buf` image.
-4. Runs `buf generate` using language-specific templates.
-5. Copies the generated code into your specified output directory.
+1. Creates a temporary workspace and merges local and remote `.proto` files.
+2. Clones remote repositories using HTTPS (with token) or SSH.
+3. Runs a Docker container using the `bufbuild/buf` image.
+4. Uses `buf generate` with the appropriate templates.
+5. Outputs generated code to the specified directory.
 
 ---
 
 ## 📄 License
 
-This project is licensed under the **MIT License**. See the [LICENSE](LICENSE) file for details.
+Licensed under the [MIT License](LICENSE).

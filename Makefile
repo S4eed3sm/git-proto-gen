@@ -1,4 +1,4 @@
-VERSION=0.0.1
+VERSION=0.0.2
 BINARY=git-proto-gen
 BUILD_DIR=releases
 

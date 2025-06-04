@@ -82,7 +82,7 @@ func parseArgs() (*Config, error) {
 		},
 	}
 
-	cmd.Flags().StringVar(&cfg.LocalPath, "local", "proto", "Path to local .proto files, e.g: './proto'")
+	cmd.Flags().StringVar(&cfg.LocalPath, "local", "", "Path to local .proto files, e.g: './proto'")
 	cmd.Flags().StringSliceVar(&cfg.PrivateRepos, "private-repo", nil, `GitHub path(s) to private proto repos (repeatable, comma-separated), e.g: "github.com/S4eed3sm/private-test-proto/proto"`)
 	cmd.Flags().StringSliceVar(&cfg.PublicRepos, "public-repo", nil, `GitHub path(s) to public proto repos (repeatable, comma-separated), e.g: "github.com/S4eed3sm/public-test-proto/proto"`)
 	cmd.Flags().StringVar(&cfg.OutputPath, "output", "events", "Output directory for generated files")

@@ -3,9 +3,11 @@ package main
 import (
 	"context"
 	"fmt"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/google/go-github/v72/github"
@@ -72,10 +74,11 @@ func downloadPrivateRemoteProtoToTempWithSSH(ctx context.Context, remotePath, ds
 	pathInRepo := parts[3] // e.g:  proto or proto/file.proto
 
 	sshURL := fmt.Sprintf("git@github.com:%s/%s.git", owner, repo)
-	tempRepoDir := filepath.Join(dstDir, repo)
-	if err := os.MkdirAll(tempRepoDir, 0755); err != nil {
+	tempRepoDir, err := os.MkdirTemp("", "tempRepo")
+	if err != nil {
 		return fmt.Errorf("failed to create temporary directory for repository: %w", err)
 	}
+	defer os.RemoveAll(tempRepoDir)
 
 	cmd := exec.CommandContext(ctx, "git", "clone", sshURL, tempRepoDir)
 	if err := cmd.Run(); err != nil {
@@ -83,12 +86,41 @@ func downloadPrivateRemoteProtoToTempWithSSH(ctx context.Context, remotePath, ds
 	}
 
 	sourcePath := filepath.Join(tempRepoDir, pathInRepo)
-	if err := copyLocalProtoToTemp(sourcePath, dstDir); err != nil {
-		return fmt.Errorf("failed to copy proto files from cloned repository: %w", err)
-	}
 
-	if err := os.RemoveAll(tempRepoDir); err != nil {
-		return fmt.Errorf("failed to clean up temporary repository: %w", err)
+	filepath.WalkDir(sourcePath, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+
+		if !d.IsDir() && strings.HasSuffix(d.Name(), ".proto") {
+			tmp := strings.Split(path, "/")
+			if len(tmp) <= 5 {
+				return nil
+			}
+
+			rootPath := tmp[4]
+			re, err := regexp.Compile(`import\s*"` + rootPath + `/`)
+			if err != nil {
+				return fmt.Errorf("failed to compile regex for import replacement: %w", err)
+			}
+
+			content, err := os.ReadFile(path)
+			if err != nil {
+				return fmt.Errorf("failed to read file '%s': %w", path, err)
+			}
+			content = re.ReplaceAll(content, []byte(`import "`+repo+`/`+rootPath+`/`))
+			err = os.WriteFile(path, content, 0644)
+			if err != nil {
+				return fmt.Errorf("failed to write modified file '%s': %w", path, err)
+			}
+		}
+
+		return nil
+	})
+
+	destPath := filepath.Join(dstDir, repo, pathInRepo)
+	if err := copyLocalProtoToTemp(sourcePath, destPath); err != nil {
+		return fmt.Errorf("failed to copy proto files from cloned repository: %w", err)
 	}
 
 	return nil
@@ -108,6 +140,7 @@ func downloadPublicRemoteProtoToTemp(ctx context.Context, remotePath, dstDir str
 
 	client := github.NewClient(nil)
 
+	dstDir = filepath.Join(dstDir, repo)
 	return fetchAndSaveGitHubContents(ctx, client, owner, repo, pathInRepo, dstDir)
 }
 
@@ -158,6 +191,16 @@ func fetchAndSaveGitHubContents(ctx context.Context, client *github.Client, owne
 			content, err := singleFileContent.GetContent()
 			if err != nil {
 				return fmt.Errorf("failed to decode content for file '%s': %w", itemPath, err)
+			}
+
+			tmp := strings.Split(itemPath, "/")
+			if len(tmp) >= 2 {
+				rootPath := tmp[1]
+				re, err := regexp.Compile(`import\s*"` + rootPath + `/`)
+				if err != nil {
+					return fmt.Errorf("failed to compile regex for import replacement: %w", err)
+				}
+				content = re.ReplaceAllString(content, `import "`+repo+`/`+rootPath+`/`)
 			}
 
 			filePath := filepath.Join(hostDestDir, itemName)

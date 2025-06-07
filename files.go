@@ -114,8 +114,6 @@ func copyLocalProtoToTemp(srcDir, dstDir string) error {
 			if err := copyFile(path, targetPath); err != nil {
 				return fmt.Errorf("failed to copy proto file '%s' to '%s': %w", path, targetPath, err)
 			}
-
-			return nil
 		}
 
 		return nil

@@ -88,6 +88,7 @@ func parseArgs() (*Config, error) {
 	cmd.Flags().StringVar(&cfg.OutputPath, "output", "events", "Output directory for generated files")
 	cmd.Flags().StringSliceVar(&cfg.Languages, "lang", []string{"go", "js"}, "Target language(s) for code generation: go, js (comma-separated or repeatable)")
 	cmd.Flags().StringVar(&cfg.OptionalBufConfigsPath, "buf-configs", "", "Path to optional buf config files (buf.yaml, buf.gen.go.yaml, buf.gen.js.yaml)")
+	cmd.Flags().StringVar(&cfg.GithubToken, "token", "", "GitHub token for private repos")
 
 	if err := cmd.Execute(); err != nil {
 		return nil, err

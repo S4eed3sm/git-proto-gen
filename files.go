@@ -109,8 +109,11 @@ func copyLocalProtoToTemp(srcDir, dstDir string) error {
 			}
 			return nil
 		}
-
+		
 		if strings.HasSuffix(info.Name(), ".proto") {
+			if err := os.MkdirAll(filepath.Dir(targetPath), 0755); err != nil {
+				return fmt.Errorf("failed to create directory %s: %w", filepath.Dir(targetPath), err)
+			}
 			if err := copyFile(path, targetPath); err != nil {
 				return fmt.Errorf("failed to copy proto file '%s' to '%s': %w", path, targetPath, err)
 			}
@@ -193,13 +196,15 @@ func prepareTempFilesAndDirs(ctx context.Context, config *Config) (string, strin
 		case GithubAuthMethodToken:
 			for _, p := range config.PrivateRepos {
 				if err := downloadPrivateRemoteProtoToTemp(ctx, config.GithubToken, p, hostProtoSubDir); err != nil {
-					logger.Error("failed to download private-repo", "proto", p, "error", err)
+					logger.Error("failed to download private-repo with token", "proto", p, "error", err)
+					return "", "", "", fmt.Errorf("prepareTempFilesAndDirs: failed to download private-repo with token, err: %w", err)
 				}
 			}
 		case GithubAuthMethodSSH:
 			for _, p := range config.PrivateRepos {
 				if err := downloadPrivateRemoteProtoToTempWithSSH(ctx, p, hostProtoSubDir); err != nil {
-					logger.Error("failed to download private-repo", "proto", p, "error", err)
+					logger.Error("failed to download private-repo with ssh-key", "proto", p, "error", err)
+					return "", "", "", fmt.Errorf("prepareTempFilesAndDirs: failed to download private-repo with ssh-key, err: %w", err)
 				}
 			}
 		}
@@ -210,6 +215,7 @@ func prepareTempFilesAndDirs(ctx context.Context, config *Config) (string, strin
 		for _, p := range config.PublicRepos {
 			if err := downloadPublicRemoteProtoToTemp(ctx, p, hostProtoSubDir); err != nil {
 				logger.Error("failed to download public-repo", "proto", p, "error", err)
+				return "", "", "", fmt.Errorf("failed to download public-repo, err: %w", err)
 			}
 		}
 		logger.Info("successfully downloaded all public repos")

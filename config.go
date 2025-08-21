@@ -83,8 +83,8 @@ func parseArgs() (*Config, error) {
 	}
 
 	cmd.Flags().StringVar(&cfg.LocalPath, "local", "", "Path to local .proto files, e.g: './proto'")
-	cmd.Flags().StringSliceVar(&cfg.PrivateRepos, "private-repo", nil, `GitHub path(s) to private proto repos (repeatable, comma-separated), e.g: "github.com/S4eed3sm/private-test-proto/proto"`)
-	cmd.Flags().StringSliceVar(&cfg.PublicRepos, "public-repo", nil, `GitHub path(s) to public proto repos (repeatable, comma-separated), e.g: "github.com/S4eed3sm/public-test-proto/proto"`)
+	cmd.Flags().StringSliceVar(&cfg.PrivateRepos, "private-repo", nil, `GitHub path(s) to private proto repos, branch name is optional (repeatable, comma-separated), e.g: "github.com/S4eed3sm/private-test-proto/proto@main"`)
+	cmd.Flags().StringSliceVar(&cfg.PublicRepos, "public-repo", nil, `GitHub path(s) to public proto repos, branch name is optional (repeatable, comma-separated), e.g: "github.com/S4eed3sm/public-test-proto/proto@dev"`)
 	cmd.Flags().StringVar(&cfg.OutputPath, "output", "events", "Output directory for generated files")
 	cmd.Flags().StringSliceVar(&cfg.Languages, "lang", []string{"go", "js"}, "Target language(s) for code generation: go, js (comma-separated or repeatable)")
 	cmd.Flags().StringVar(&cfg.OptionalBufConfigsPath, "buf-configs", "", "Path to optional buf config files (buf.yaml, buf.gen.go.yaml, buf.gen.js.yaml)")

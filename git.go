@@ -37,6 +37,26 @@ func checkSSHKeys() bool {
 	return false
 }
 
+func parseRepoPath(remotePath string) (owner, repo, path, branch string, err error) {
+	parts := strings.Split(remotePath, "@")
+	repoPath := parts[0]
+	if len(parts) > 1 {
+		branch = parts[1]
+	}
+
+	pathParts := strings.SplitN(repoPath, "/", 4)
+	if len(pathParts) < 4 || pathParts[0] != "github.com" {
+		err = fmt.Errorf("invalid repo path format: '%s'", remotePath)
+		return
+	}
+
+	owner = pathParts[1]
+	repo = pathParts[2]
+	path = pathParts[3]
+
+	return
+}
+
 // downloadPrivateRemoteProtoToTemp parses the private-repo GitHub path and downloads .proto files
 // into the specified destination directory.
 func downloadPrivateRemoteProtoToTemp(ctx context.Context, githubToken, remotePath, dstDir string) error {
@@ -44,14 +64,10 @@ func downloadPrivateRemoteProtoToTemp(ctx context.Context, githubToken, remotePa
 		return fmt.Errorf("gitHub token is required for private-repo access.")
 	}
 	logger.Info("downloading private-repo proto files using GitHub API", "remotePath", remotePath)
-	parts := strings.SplitN(remotePath, "/", 4)
-	if len(parts) < 4 || parts[0] != "github.com" {
-		return fmt.Errorf("invalid repo path format: '%s'.", remotePath)
+	owner, repo, pathInRepo, branch, err := parseRepoPath(remotePath)
+	if err != nil {
+		return err
 	}
-
-	owner := parts[1]      // e.g: S4ee3sm
-	repo := parts[2]       // e.g: public-test-repo
-	pathInRepo := parts[3] // e.g:  proto or proto/file.proto
 
 	ts := oauth2.StaticTokenSource(
 		&oauth2.Token{AccessToken: githubToken},
@@ -59,19 +75,15 @@ func downloadPrivateRemoteProtoToTemp(ctx context.Context, githubToken, remotePa
 	tc := oauth2.NewClient(ctx, ts)
 	client := github.NewClient(tc)
 
-	return fetchAndSaveGitHubContents(ctx, client, owner, repo, pathInRepo, dstDir)
+	return fetchAndSaveGitHubContents(ctx, client, owner, repo, pathInRepo, branch, dstDir)
 }
 
 func downloadPrivateRemoteProtoToTempWithSSH(ctx context.Context, remotePath, dstDir string) error {
 	logger.Info("downloading private-repo proto files using SSH", "remotePath", remotePath)
-	parts := strings.SplitN(remotePath, "/", 4)
-	if len(parts) < 4 || parts[0] != "github.com" {
-		return fmt.Errorf("invalid repo path format: '%s'.", remotePath)
+	owner, repo, pathInRepo, branch, err := parseRepoPath(remotePath)
+	if err != nil {
+		return err
 	}
-
-	owner := parts[1]      // e.g: S4ee3sm
-	repo := parts[2]       // e.g: public-test-repo
-	pathInRepo := parts[3] // e.g:  proto or proto/file.proto
 
 	sshURL := fmt.Sprintf("git@github.com:%s/%s.git", owner, repo)
 	tempRepoDir, err := os.MkdirTemp("", "tempRepo")
@@ -80,7 +92,13 @@ func downloadPrivateRemoteProtoToTempWithSSH(ctx context.Context, remotePath, ds
 	}
 	defer os.RemoveAll(tempRepoDir)
 
-	cmd := exec.CommandContext(ctx, "git", "clone", sshURL, tempRepoDir)
+	args := []string{"clone"}
+	if branch != "" {
+		args = append(args, "--branch", branch)
+	}
+	args = append(args, sshURL, tempRepoDir)
+
+	cmd := exec.CommandContext(ctx, "git", args...)
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("failed to clone repository using SSH: %w", err)
 	}
@@ -129,25 +147,25 @@ func downloadPrivateRemoteProtoToTempWithSSH(ctx context.Context, remotePath, ds
 // downloadPublicRemoteProtoToTemp parses the public-repo GitHub path and downloads .proto files
 // into the specified destination directory.
 func downloadPublicRemoteProtoToTemp(ctx context.Context, remotePath, dstDir string) error {
-	parts := strings.SplitN(remotePath, "/", 4)
-	if len(parts) < 4 || parts[0] != "github.com" {
-		return fmt.Errorf("invalid repo path format: '%s'.", remotePath)
+	owner, repo, pathInRepo, branch, err := parseRepoPath(remotePath)
+	if err != nil {
+		return err
 	}
-
-	owner := parts[1]      // e.g: S4ee3sm
-	repo := parts[2]       // e.g: public-test-repo
-	pathInRepo := parts[3] // e.g:  proto or proto/file.proto
 
 	client := github.NewClient(nil)
 
 	dstDir = filepath.Join(dstDir, repo)
-	return fetchAndSaveGitHubContents(ctx, client, owner, repo, pathInRepo, dstDir)
+	return fetchAndSaveGitHubContents(ctx, client, owner, repo, pathInRepo, branch, dstDir)
 }
 
 // fetchAndSaveGitHubContents fetches files (specifically .proto files) or directories
 // from a GitHub repository and saves them to the specified host destination directory.
-func fetchAndSaveGitHubContents(ctx context.Context, client *github.Client, owner, repo, githubPath, hostDestDir string) error {
-	fileContent, directoryContents, resp, err := client.Repositories.GetContents(ctx, owner, repo, githubPath, nil)
+func fetchAndSaveGitHubContents(ctx context.Context, client *github.Client, owner, repo, githubPath, branch, hostDestDir string) error {
+	opts := &github.RepositoryContentGetOptions{}
+	if branch != "" {
+		opts.Ref = branch
+	}
+	fileContent, directoryContents, resp, err := client.Repositories.GetContents(ctx, owner, repo, githubPath, opts)
 	if err != nil {
 		if resp != nil && resp.StatusCode == 404 {
 			return fmt.Errorf("path '%s' not found within repository '%s/%s'. Check path spelling or ensure it exists", githubPath, owner, repo)
@@ -179,7 +197,7 @@ func fetchAndSaveGitHubContents(ctx context.Context, client *github.Client, owne
 		itemName := item.GetName() // Name of the item (e.g., "my_service.proto", "sub_dir").
 
 		if itemType == "file" && strings.HasSuffix(itemName, ".proto") {
-			singleFileContent, _, _, err := client.Repositories.GetContents(ctx, owner, repo, itemPath, nil)
+			singleFileContent, _, _, err := client.Repositories.GetContents(ctx, owner, repo, itemPath, opts)
 			if err != nil {
 				return fmt.Errorf("failed to get content for individual file '%s': %w", itemPath, err)
 			}
@@ -213,7 +231,7 @@ func fetchAndSaveGitHubContents(ctx context.Context, client *github.Client, owne
 				return fmt.Errorf("failed to create subdirectory '%s': %w", subDirPath, err)
 			}
 
-			if err := fetchAndSaveGitHubContents(ctx, client, owner, repo, itemPath, subDirPath); err != nil {
+			if err := fetchAndSaveGitHubContents(ctx, client, owner, repo, itemPath, branch, subDirPath); err != nil {
 				return err
 			}
 		}

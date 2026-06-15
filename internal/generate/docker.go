@@ -35,6 +35,9 @@ func (g *dockerGenerator) Generate(ctx context.Context, workspaceDir, outDir str
 		Image:      image,
 		WorkingDir: "/workspace",
 		User:       "1000:1000", // Run as current user
+		Env: map[string]string{
+			"HOME": "/tmp", // Writable home directory for caching
+		},
 		Entrypoint: []string{"sh"},
 		Cmd:        []string{"-c", "tail -f /dev/null"},
 		WaitingFor: wait.ForExec([]string{"echo", "ready"}).

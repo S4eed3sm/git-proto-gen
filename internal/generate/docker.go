@@ -13,9 +13,9 @@ import (
 	"github.com/testcontainers/testcontainers-go/wait"
 )
 
-// containerOutputDir is where the host output directory is bind-mounted inside
-// the container and where buf is told to write generated code.
-const containerOutputDir = "/workspace/temp_generated_output"
+// containerOutputDir is a non-mounted directory inside the container where buf
+// writes generated code.
+const containerOutputDir = "/tmp/buf_generated"
 
 // dockerGenerator runs buf inside one reused container for all jobs.
 type dockerGenerator struct {
@@ -42,7 +42,6 @@ func (g *dockerGenerator) Generate(ctx context.Context, workspaceDir, outDir str
 		HostConfigModifier: func(hc *container.HostConfig) {
 			hc.Binds = []string{
 				fmt.Sprintf("%s:%s", workspaceDir, "/workspace"),
-				fmt.Sprintf("%s:%s", outDir, containerOutputDir),
 			}
 			hc.Memory = mem
 			hc.MemorySwap = mem
@@ -80,6 +79,10 @@ func (g *dockerGenerator) Generate(ctx context.Context, workspaceDir, outDir str
 
 func (g *dockerGenerator) runJob(ctx context.Context, c testcontainers.Container, job *Job) error {
 	tmpl := path.Join("/workspace", job.TemplateFile)
+	
+	// Ensure the internal output dir exists
+	_, _, _ = execAndRead(ctx, c, []string{"mkdir", "-p", containerOutputDir})
+
 	var cmd []string
 	if job.Lang == "js" {
 		// protoc-gen-es is installed locally under node_modules/.bin.
@@ -97,6 +100,17 @@ func (g *dockerGenerator) runJob(ctx context.Context, c testcontainers.Container
 	if code != 0 {
 		return fmt.Errorf("buf generate (%s) exited with status %d: %s", job.Lang, code, out)
 	}
+
+	// Copy the generated files to the bind-mounted directory
+	copyCmd := []string{"sh", "-c", "cp -r " + containerOutputDir + "/* /workspace/temp_generated_output/"}
+	code, out, err = execAndRead(ctx, c, copyCmd)
+	if err != nil {
+		return fmt.Errorf("copy generated files: %w", err)
+	}
+	if code != 0 {
+		return fmt.Errorf("copy generated files (exit %d): %s", code, out)
+	}
+
 	return nil
 }
 

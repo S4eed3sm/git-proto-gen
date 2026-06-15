@@ -13,9 +13,10 @@ import (
 	"github.com/testcontainers/testcontainers-go/wait"
 )
 
-// containerOutputDir is where the host output directory is bind-mounted inside
-// the container and where buf is told to write generated code.
-const containerOutputDir = "/workspace/temp_generated_output"
+// containerOutputDir is a container-internal path (not bind-mounted) where buf
+// is told to write generated code. The tree is copied out to the host after
+// generation, so this must live outside the /workspace mount.
+const containerOutputDir = "/generated"
 
 // dockerGenerator runs buf inside one reused container for all jobs.
 type dockerGenerator struct {
@@ -40,10 +41,7 @@ func (g *dockerGenerator) Generate(ctx context.Context, workspaceDir, outDir str
 			WithStartupTimeout(120 * time.Second).
 			WithPollInterval(5 * time.Second),
 		HostConfigModifier: func(hc *container.HostConfig) {
-			hc.Binds = []string{
-				fmt.Sprintf("%s:%s", workspaceDir, "/workspace"),
-				fmt.Sprintf("%s:%s", outDir, containerOutputDir),
-			}
+			hc.Binds = []string{fmt.Sprintf("%s:%s", workspaceDir, "/workspace")}
 			hc.Memory = mem
 			hc.MemorySwap = mem
 		},
@@ -62,6 +60,14 @@ func (g *dockerGenerator) Generate(ctx context.Context, workspaceDir, outDir str
 		}
 	}()
 
+	// buf creates the output dir on first write, but guard the zero-output case
+	// so the copy-out below has a directory to read.
+	if code, out, err := execAndRead(ctx, c, []string{"mkdir", "-p", containerOutputDir}); err != nil {
+		return fmt.Errorf("create container output dir: %w", err)
+	} else if code != 0 {
+		return fmt.Errorf("create container output dir (exit %d): %s", code, out)
+	}
+
 	jsReady := false
 	for _, job := range jobs {
 		if job.Lang == "js" && !jsReady {
@@ -74,6 +80,10 @@ func (g *dockerGenerator) Generate(ctx context.Context, workspaceDir, outDir str
 			return err
 		}
 		g.log.Info("generated code", "lang", job.Lang)
+	}
+
+	if err := copyOut(ctx, c, outDir); err != nil {
+		return err
 	}
 	return nil
 }

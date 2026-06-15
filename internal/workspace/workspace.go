@@ -82,6 +82,13 @@ func (w *Workspace) Close() error {
 		if dir == "" {
 			continue
 		}
+		// Ensure directory and contents are writable before removal
+		filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
+			if err == nil {
+				os.Chmod(path, 0755)
+			}
+			return nil
+		})
 		if err := os.RemoveAll(dir); err != nil {
 			errs = append(errs, fmt.Errorf("remove %q: %w", dir, err))
 		}

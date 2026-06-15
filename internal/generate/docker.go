@@ -34,6 +34,7 @@ func (g *dockerGenerator) Generate(ctx context.Context, workspaceDir, outDir str
 	req := testcontainers.ContainerRequest{
 		Image:      image,
 		WorkingDir: "/workspace",
+		User:       "1000:1000", // Run as current user
 		Entrypoint: []string{"sh"},
 		Cmd:        []string{"-c", "tail -f /dev/null"},
 		WaitingFor: wait.ForExec([]string{"echo", "ready"}).
@@ -81,17 +82,16 @@ func (g *dockerGenerator) Generate(ctx context.Context, workspaceDir, outDir str
 func (g *dockerGenerator) runJob(ctx context.Context, c testcontainers.Container, job *Job) error {
 	tmpl := path.Join("/workspace", job.TemplateFile)
 	
-	// Use a subdirectory to avoid buf trying to unlink the main output directory
-	outputSubDir := path.Join(containerOutputDir, job.Lang)
+	// Write directly to the containerOutputDir to avoid adding language-based subdirectories.
 	
 	var cmd []string
 	if job.Lang == "js" {
 		// protoc-gen-es is installed locally under node_modules/.bin.
 		cmd = []string{"sh", "-c",
 			"export PATH=./node_modules/.bin:$PATH && buf generate . --template " + tmpl +
-				" --output " + outputSubDir}
+				" --output " + containerOutputDir}
 	} else {
-		cmd = []string{"buf", "generate", ".", "--template", tmpl, "--output", outputSubDir}
+		cmd = []string{"buf", "generate", ".", "--template", tmpl, "--output", containerOutputDir}
 	}
 
 	code, out, err := execAndRead(ctx, c, cmd)

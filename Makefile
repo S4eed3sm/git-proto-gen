@@ -1,6 +1,6 @@
 # Version is derived from git so release binaries cannot drift from the tag.
 # Override on the command line if needed: `make all VERSION=1.2.3`.
-VERSION?=$(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
+VERSION?=$(shell git describe --tags 2>/dev/null || echo dev)
 BINARY=git-proto-gen
 BUILD_DIR=releases
 CMD=./cmd/git-proto-gen

@@ -1,9 +1,13 @@
-VERSION=0.0.4
+# Version is derived from git so release binaries cannot drift from the tag.
+# Override on the command line if needed: `make all VERSION=1.2.3`.
+VERSION?=$(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 BINARY=git-proto-gen
 BUILD_DIR=releases
+CMD=./cmd/git-proto-gen
+VERSION_PKG=github.com/S4eed3sm/git-proto-gen/internal/version
 
 # Build flags
-LDFLAGS=-ldflags="-s -w"
+LDFLAGS=-ldflags="-s -w -X $(VERSION_PKG).Version=$(VERSION)"
 GOFLAGS=CGO_ENABLED=0
 
 # Platforms and architectures
@@ -32,7 +36,7 @@ build-%:
 	$(eval output=$(BUILD_DIR)/$(BINARY)-$(VERSION)-$(platform)-$(name))
 	$(eval output=$(if $(filter windows,$(platform)),$(output).exe,$(output)))
 	@echo "Building for $(platform)/$(arch)..."
-	$(GOFLAGS) GOOS=$(platform) GOARCH=$(arch) go build $(LDFLAGS) -o $(output) .
+	$(GOFLAGS) GOOS=$(platform) GOARCH=$(arch) go build $(LDFLAGS) -o $(output) $(CMD)
 
 # Help target
 .PHONY: help
